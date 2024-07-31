@@ -1,2 +1,3 @@
-# Event-Management-System
-A web application for creating, managing, and tracking events.
+# Combined content
+Content from both branches merged together appropriately.
+
