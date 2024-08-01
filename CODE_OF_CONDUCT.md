@@ -14,15 +14,14 @@
     Own up to mistakes and work to fix them.
 
 
-  6. Be Inclusive
-
-    Make sure events and communications are accessible to everyone.
-    Respect diversity and accommodate special needs.
-
-7. Seek Feedback
+4. Seek Feedback
 
     Welcome and act on constructive feedback.
     Continuously look for ways to improve.
+
+5. Follow the rules
+
+    Ensure events are conducted safetly.
 
 
    Thank you all!!!
