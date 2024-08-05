@@ -1,169 +1,89 @@
 const express = require('express');
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const bodyParser = require('body-parser');
-const cors = require('cors');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const SECRET_KEY = 'your_secret_key';
 
-// Middleware
-app.use(bodyParser.json());
-app.use(cors());
+// Body parser middleware
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Express session middleware
+app.use(session({
+    secret: 'secret',
+    resave: true,
+    saveUninitialized: true
+}));
 
 // MongoDB connection
-mongoose.connect('mongodb://localhost:27017/event-management', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+mongoose.connect('mongodb://localhost/event_management', { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('MongoDB connected...'))
+    .catch(err => console.log(err));
+
+// Mongoose models
+const User = require('./models/User');
+const Event = require('./models/Event');
+
+// Serve static files (HTML, CSS)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Home page route
+app.get('/', (req, res) => {
+    res.send('<h1>Welcome to Event Management System</h1><a href="/register">Register</a> <a href="/login">Login</a>');
 });
 
-// Models
-const User = mongoose.model('User', new mongoose.Schema({
-  name: String,
-  email: { type: String, unique: true },
-  password: String,
-  role: String, // 'organiser' or 'attendee'
-}));
-
-const Event = mongoose.model('Event', new mongoose.Schema({
-  title: String,
-  description: String,
-  date: Date,
-  time: String,
-  venue: String,
-  organiser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-}));
-
-const Ticket = mongoose.model('Ticket', new mongoose.Schema({
-  event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  seatNumber: String,
-  price: Number,
-}));
-
-// Helper functions
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
-
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-};
-
-// Routes
-// Register
-app.post('/register', async (req, res) => {
-  const { name, email, password, role } = req.body;
-
-  if (!name || !email || !password || !role) {
-    return res.status(400).send('All fields are required');
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const user = new User({ name, email, password: hashedPassword, role });
-
-  try {
-    await user.save();
-    res.status(201).send('User registered successfully');
-  } catch (err) {
-    res.status(500).send('Error registering user');
-  }
+// Register route
+app.get('/register', (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'register.html'));
 });
 
-// Login
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user) return res.status(400).send('Invalid credentials');
-
-  const validPassword = await bcrypt.compare(password, user.password);
-  if (!validPassword) return res.status(400).send('Invalid credentials');
-
-  const token = jwt.sign({ userId: user._id, role: user.role }, SECRET_KEY);
-  res.json({ token });
+app.post('/register', (req, res) => {
+    const { name, email, password, role } = req.body;
+    const newUser = new User({ name, email, password, role });
+    newUser.save()
+        .then(() => res.redirect('/login'))
+        .catch(err => res.status(400).send('Error registering user: ' + err.message));
 });
 
-// Create Event
-app.post('/events', authenticateToken, async (req, res) => {
-  const { title, description, date, time, venue } = req.body;
-
-  const event = new Event({
-    title,
-    description,
-    date,
-    time,
-    venue,
-    organiser: req.user.userId,
-  });
-
-  try {
-    await event.save();
-    res.status(201).send('Event created successfully');
-  } catch (err) {
-    res.status(500).send('Error creating event');
-  }
+// Login route
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
 
-// Book Ticket
-app.post('/tickets', authenticateToken, async (req, res) => {
-  const { eventId, seatNumber, price } = req.body;
-
-  const ticket = new Ticket({
-    event: eventId,
-    user: req.user.userId,
-    seatNumber,
-    price,
-  });
-
-  try {
-    await ticket.save();
-    res.status(201).send('Ticket booked successfully');
-  } catch (err) {
-    res.status(500).send('Error booking ticket');
-  }
+app.post('/login', (req, res) => {
+    const { email, password } = req.body;
+    User.findOne({ email, password })
+        .then(user => {
+            if (!user) {
+                return res.status(400).send('Invalid email or password');
+            }
+            req.session.user = user;
+            res.redirect('/dashboard');
+        })
+        .catch(err => res.status(400).send('Error logging in: ' + err.message));
 });
 
-// Continuous Integration: Integrate with GitHub Actions
-// Create .github/workflows/ci.yml for GitHub Actions
-const fs = require('fs');
-const ciContent = `
-name: Node.js CI
+// Dashboard route
+app.get('/dashboard', (req, res) => {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+    res.send(`<h1>Welcome ${req.session.user.name}</h1><a href="/logout">Logout</a>`);
+});
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+// Logout route
+app.get('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).send('Error logging out');
+        }
+        res.redirect('/');
+    });
+});
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [14.x, 16.x]
-
-    steps:
-    - uses: actions/checkout@v2
-    - name: Use Node.js \${{ matrix.node-version }}
-      uses: actions/setup-node@v2
-      with:
-        node-version: \${{ matrix.node-version }}
-    - run: npm install
-    - run: npm test
-`;
-
-fs.mkdirSync('.github/workflows', { recursive: true });
-fs.writeFileSync('.github/workflows/ci.yml', ciContent);
-
-// Start server
+// Starting the server
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
