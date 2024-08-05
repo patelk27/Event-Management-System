@@ -1,28 +1,30 @@
 const express = require('express');
-const mongoose = require('mongoose');
-const bodyParser = require('body-parser');
-const cors = require('cors');
+const router = express.Router();
 
-const app = express();
-app.use(bodyParser.json());
-app.use(cors());
+// Home Page
+router.get('/', (req, res) => {
+    res.send('<h1>Welcome to the Event Management System</h1><a href="/register">Register</a><br><a href="/login">Login</a>');
+});
 
-// Import routes
-const userRoutes = require('./routes/userRoutes');
-const eventRoutes = require('./routes/eventRoutes');
+// Register Page
+router.get('/register', (req, res) => {
+    res.send('<h1>Register Page</h1><form method="post" action="/register"><input type="text" name="username" placeholder="Username"/><br><input type="password" name="password" placeholder="Password"/><br><button type="submit">Register</button></form>');
+});
 
-// Use routes
-app.use('/api/users', userRoutes);
-app.use('/api/events', eventRoutes);
+router.post('/register', (req, res) => {
+    // Register user logic here
+    res.redirect('/login');
+});
 
-// Connect to MongoDB
-mongoose.connect('mongodb://localhost/event_management', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.log(err));
+// Login Page
+router.get('/login', (req, res) => {
+    res.send('<h1>Login Page</h1><form method="post" action="/login"><input type="text" name="username" placeholder="Username"/><br><input type="password" name="password" placeholder="Password"/><br><button type="submit">Login</button></form>');
+});
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+router.post('/login', (req, res) => {
+    // Login user logic here
+    res.redirect('/dashboard');
+});
+
+// Export the router
+module.exports = router;
